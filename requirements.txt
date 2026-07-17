@@ -1,0 +1,13 @@
+# Core data + image handling
+numpy==2.5.1
+pydicom==3.0.2
+nibabel==5.4.2
+scipy==1.18.0
+scikit-image==0.26.0
+pillow==12.3.0
+
+# Web app
+flask==3.1.3
+
+# Desktop viewer
+matplotlib==3.11.0

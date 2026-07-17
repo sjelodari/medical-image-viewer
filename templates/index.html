@@ -1,0 +1,465 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medical Image Viewer</title>
+<style>
+:root{
+  --bg:#0b0e14; --panel:#12161f; --panel2:#171c28; --border:#232a38;
+  --text:#dbe2ec; --muted:#8a94a6; --accent:#4aa3ff; --accent-dim:#274b73;
+  --amber:#ffb020; --danger:#ff5d5d; --ok:#3ecf8e;
+  --shadow:0 2px 10px rgba(0,0,0,.4);
+}
+:root[data-theme="light"]{
+  --bg:#eef1f6; --panel:#ffffff; --panel2:#f3f5fa; --border:#d5dbe6;
+  --text:#1a2230; --muted:#5c6675; --accent:#1f6fd6; --accent-dim:#bcd6f5;
+  --amber:#c67c00; --shadow:0 2px 8px rgba(30,50,90,.12);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--text); font:13px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  display:grid; grid-template-rows:auto 1fr; overflow:hidden;
+}
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--border);
+  border-radius:7px;padding:6px 10px;cursor:pointer;transition:.12s}
+button:hover{border-color:var(--accent);color:var(--accent)}
+button.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:7px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--border)}
+.seg button:last-child{border-right:0}
+select{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--border);
+  border-radius:7px;padding:6px 8px;cursor:pointer}
+
+/* ---------- header ---------- */
+header{display:flex;align-items:center;gap:14px;padding:9px 14px;background:var(--panel);
+  border-bottom:1px solid var(--border);box-shadow:var(--shadow);z-index:5}
+.brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.3px}
+.brand .dot{width:11px;height:11px;border-radius:50%;background:var(--accent);
+  box-shadow:0 0 10px var(--accent)}
+#patient{flex:1;display:flex;gap:16px;flex-wrap:wrap;align-items:center;
+  color:var(--muted);font-size:12.5px;min-height:20px}
+#patient b{color:var(--text);font-weight:600}
+#patient .chip{background:var(--panel2);border:1px solid var(--border);border-radius:20px;
+  padding:3px 11px;white-space:nowrap}
+.header-actions{display:flex;gap:8px;align-items:center}
+#btnQuit:hover{border-color:var(--danger);color:var(--danger)}
+
+/* ---------- body layout ---------- */
+main{display:grid;grid-template-columns:230px 1fr;min-height:0}
+aside{background:var(--panel);border-right:1px solid var(--border);display:flex;
+  flex-direction:column;min-height:0}
+.aside-h{padding:10px 12px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.7px;
+  color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+#serieslist{overflow-y:auto;padding:4px 8px 10px;flex:1}
+.series{display:flex;gap:9px;align-items:center;padding:6px;border:1px solid transparent;
+  border-radius:9px;cursor:pointer;margin-bottom:4px;position:relative}
+.series:hover{background:var(--panel2)}
+.series.sel{border-color:var(--accent);background:var(--panel2)}
+.series .thumb{width:52px;height:52px;border-radius:6px;background:#000;object-fit:contain;
+  border:1px solid var(--border);flex:none}
+.series .meta{min-width:0}
+.series .name{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:12.5px}
+.series .sub{color:var(--muted);font-size:11px}
+.series .badge{position:absolute;top:4px;right:4px;width:19px;height:19px;border-radius:50%;
+  background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:none;
+  align-items:center;justify-content:center}
+.series.sel .badge{display:flex}
+.series.report{opacity:.55}
+.hint{color:var(--muted);font-size:11.5px;padding:14px 12px;line-height:1.6}
+
+/* ---------- viewer ---------- */
+.viewer{display:grid;grid-template-rows:auto 1fr auto;min-width:0;min-height:0}
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:9px 14px;
+  background:var(--panel);border-bottom:1px solid var(--border)}
+.toolbar .group{display:flex;gap:7px;align-items:center}
+.toolbar label.lbl{color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+.sep{width:1px;height:22px;background:var(--border)}
+#stage{position:relative;background:#000;min-height:0;overflow:hidden}
+#grid{position:absolute;inset:0;display:grid;gap:2px;padding:2px}
+.pane{position:relative;background:#000;overflow:hidden;border:1px solid #000;
+  display:flex;align-items:center;justify-content:center}
+.pane.focus{border-color:var(--accent-dim)}
+.pane img{max-width:100%;max-height:100%;image-rendering:auto;user-select:none;
+  -webkit-user-drag:none;transform-origin:center center}
+.pane .ov{position:absolute;pointer-events:none;font-size:11.5px;color:#cfe3ff;
+  text-shadow:0 1px 3px #000;font-variant-numeric:tabular-nums}
+.pane .ov.tl{top:6px;left:8px;font-weight:600;color:#fff}
+.pane .ov.bl{bottom:6px;left:8px;color:var(--muted)}
+.pane .ov.br{bottom:6px;right:8px;color:var(--muted)}
+.pane .close{position:absolute;top:5px;right:6px;pointer-events:auto;width:20px;height:20px;
+  border-radius:50%;border:0;background:rgba(0,0,0,.5);color:#fff;font-size:12px;
+  line-height:1;display:none}
+.pane:hover .close{display:block}
+.empty{color:#3a4456;font-size:13px;text-align:center;padding:20px}
+.footer{display:flex;align-items:center;gap:12px;padding:8px 14px;background:var(--panel);
+  border-top:1px solid var(--border)}
+.footer input[type=range]{flex:1;accent-color:var(--accent)}
+#slicelbl{color:var(--muted);min-width:120px;font-variant-numeric:tabular-nums;font-size:12px}
+
+/* help */
+#help{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;
+  justify-content:center;z-index:20}
+#help .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;
+  padding:22px 26px;max-width:460px;box-shadow:var(--shadow)}
+#help h3{margin:0 0 12px}
+#help table{width:100%;border-collapse:collapse;font-size:12.5px}
+#help td{padding:4px 8px;border-bottom:1px solid var(--border)}
+#help kbd{background:var(--panel2);border:1px solid var(--border);border-radius:5px;
+  padding:1px 7px;font-family:ui-monospace,monospace;font-size:11px}
+.disclaimer{color:var(--muted);font-size:11px;padding:4px 14px 0}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel);
+  border:1px solid var(--border);border-radius:9px;padding:10px 16px;box-shadow:var(--shadow);
+  display:none;z-index:30}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand"><span class="dot"></span> Medical Image Viewer</div>
+  <div id="patient"><span class="hint">Open a scan to begin →</span></div>
+  <div class="header-actions">
+    <button id="btnInfo" title="Toggle patient info (I)">Info</button>
+    <button id="btnTheme" title="Toggle light/dark (D)">☾</button>
+    <button id="btnHelp" title="Shortcuts (?)">?</button>
+    <button id="btnFolder">Open Folder…</button>
+    <button id="btnFile">Open File…</button>
+    <button id="btnQuit" title="Stop the viewer">Quit</button>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="aside-h"><span>Series</span><span id="selcount"></span></div>
+    <div id="serieslist"><div class="hint">No study loaded.<br>Click <b>Open Folder…</b> and choose an MRI folder. Then click series to view (up to 4 at once).</div></div>
+  </aside>
+
+  <div class="viewer">
+    <div class="toolbar">
+      <div class="group">
+        <label class="lbl">Plane</label>
+        <div class="seg" id="planes">
+          <button data-plane="axial" class="active">Axial</button>
+          <button data-plane="coronal">Coronal</button>
+          <button data-plane="sagittal">Sagittal</button>
+        </div>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <label class="lbl">Enhance</label>
+        <select id="filter">
+          <option value="none">Original</option>
+          <option value="invert">Invert</option>
+          <option value="clahe">CLAHE — local contrast</option>
+          <option value="sharpen">Sharpen</option>
+          <option value="denoise">Denoise</option>
+          <option value="edges">Edges</option>
+          <option value="highlight">Highlight fluid</option>
+        </select>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <label class="lbl">Window</label>
+        <select id="preset">
+          <optgroup label="General">
+            <option value="auto">Auto</option>
+            <option value="bright">Brighter</option>
+            <option value="dark">Darker</option>
+            <option value="high">High contrast</option>
+            <option value="low">Low contrast</option>
+          </optgroup>
+          <optgroup label="CT windows (Hounsfield)">
+            <option value="ct_brain">CT · Brain</option>
+            <option value="ct_soft">CT · Soft tissue</option>
+            <option value="ct_abdomen">CT · Abdomen</option>
+            <option value="ct_lung">CT · Lung</option>
+            <option value="ct_bone">CT · Bone</option>
+            <option value="ct_angio">CT · Angio</option>
+          </optgroup>
+        </select>
+        <button id="btnResetWL" title="Reset window/level (R)">Reset W/L</button>
+      </div>
+      <div class="sep"></div>
+      <div class="group">
+        <button id="btnSync" class="active" title="Synchronize scrolling across panels">Sync</button>
+        <button id="btnResetView" title="Reset zoom/pan (F)">Fit</button>
+      </div>
+    </div>
+
+    <div id="stage">
+      <div id="grid"><div class="empty">Select one or more series from the left</div></div>
+    </div>
+
+    <div class="footer">
+      <span id="slicelbl">—</span>
+      <input type="range" id="slice" min="0" max="1000" value="500">
+    </div>
+    <div class="disclaimer">Image-enhancement tools only — not a diagnosis. Interpretation requires a qualified radiologist.</div>
+  </div>
+</main>
+
+<div id="help"><div class="card">
+  <h3>Keyboard &amp; mouse</h3>
+  <table>
+    <tr><td>Scroll / <kbd>↑</kbd><kbd>↓</kbd></td><td>Move through slices</td></tr>
+    <tr><td>Left-drag</td><td>Window / level (contrast &amp; brightness)</td></tr>
+    <tr><td><kbd>Ctrl</kbd>+scroll</td><td>Zoom · Shift-drag = pan</td></tr>
+    <tr><td><kbd>A</kbd> <kbd>C</kbd> <kbd>S</kbd></td><td>Axial / Coronal / Sagittal</td></tr>
+    <tr><td><kbd>1</kbd>…<kbd>7</kbd></td><td>Enhancement filter</td></tr>
+    <tr><td><kbd>R</kbd> / <kbd>F</kbd></td><td>Reset window / reset zoom</td></tr>
+    <tr><td><kbd>I</kbd> <kbd>D</kbd></td><td>Toggle patient info / theme</td></tr>
+    <tr><td>Double-click</td><td>Reset that panel's view</td></tr>
+  </table>
+  <p style="text-align:right;margin:14px 0 0"><button onclick="document.getElementById('help').style.display='none'">Close</button></p>
+</div></div>
+
+<div id="toast"></div>
+
+<script>
+const S={series:[],patient:null,selected:[],plane:"axial",filter:"none",sync:true,
+  pos:0.5,meta:{},wl:{},view:{},showInfo:true,theme:"dark"};
+const FILTER_KEYS=["none","invert","clahe","sharpen","denoise","edges","highlight"];
+const $=s=>document.querySelector(s);
+
+function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";
+  clearTimeout(t._t);t._t=setTimeout(()=>t.style.display="none",2600);}
+
+async function jget(url){const r=await fetch(url);return r.json();}
+
+/* ---------- open / study ---------- */
+async function openResult(res){
+  if(!res||res.cancelled)return;
+  if(!res.ok){toast(res.error||"Could not open");return;}
+  S.series=res.series;S.patient=res.patient;S.selected=[];S.meta={};S.wl={};S.view={};
+  renderPatient();renderSeries();
+  const first=S.series.find(s=>s.is_image);
+  if(first)await selectSeries(first.index);
+  layout();
+}
+$("#btnFolder").onclick=async()=>openResult(await jget("/api/browse?type=folder"));
+$("#btnFile").onclick=async()=>openResult(await jget("/api/browse?type=file"));
+
+function renderPatient(){
+  const p=S.patient,el=$("#patient");
+  el.style.display=S.showInfo?"flex":"none";
+  if(!p){el.innerHTML='<span class="hint">No patient metadata in this file.</span>';return;}
+  const who=[p.sex,p.age||p.dob].filter(Boolean).join(" · ");
+  const study=[p.study||p.body,p.date].filter(Boolean).join("  ");
+  const chips=[];
+  if(p.name)chips.push(`<span class="chip"><b>${esc(p.name)}</b></span>`);
+  if(p.id)chips.push(`<span class="chip">ID ${esc(p.id)}</span>`);
+  if(who)chips.push(`<span class="chip">${esc(who)}</span>`);
+  if(study)chips.push(`<span class="chip">${esc(study)}</span>`);
+  if(p.scanner)chips.push(`<span class="chip">${esc(p.scanner)}</span>`);
+  el.innerHTML=chips.join("")||'<span class="hint">—</span>';
+  el.style.display=S.showInfo?"flex":"none";
+}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+function renderSeries(){
+  const box=$("#serieslist");box.innerHTML="";
+  S.series.forEach(s=>{
+    const d=document.createElement("div");
+    d.className="series"+(s.is_image?"":" report");
+    d.dataset.i=s.index;
+    const thumb=s.is_image?`/api/series/${s.index}/slice?plane=axial&filter=none&scale=8`:"";
+    d.innerHTML=`
+      ${thumb?`<img class="thumb" src="${thumb}" loading="lazy">`:`<div class="thumb"></div>`}
+      <div class="meta">
+        <div class="name">${esc(s.desc)}</div>
+        <div class="sub">${esc(s.modality||"")} · ${s.count} img${s.is_image?"":" · report"}</div>
+      </div><div class="badge"></div>`;
+    if(s.is_image)d.onclick=()=>toggleSeries(s.index);
+    box.appendChild(d);
+  });
+  updateSeriesUI();
+}
+function updateSeriesUI(){
+  document.querySelectorAll(".series").forEach(d=>{
+    const i=+d.dataset.i;const pos=S.selected.indexOf(i);
+    d.classList.toggle("sel",pos>=0);
+    d.querySelector(".badge").textContent=pos>=0?pos+1:"";
+  });
+  $("#selcount").textContent=S.selected.length?`${S.selected.length}/4`:"";
+}
+
+async function ensureMeta(i){
+  if(S.meta[i])return S.meta[i];
+  const m=await jget(`/api/series/${i}/meta`);
+  S.meta[i]=m;S.wl[i]={level:m.level,width:m.width,baseL:m.level,baseW:m.width,range:m.range};
+  S.view[i]={zoom:1,tx:0,ty:0};
+  return m;
+}
+async function selectSeries(i){ if(!S.selected.includes(i)){S.selected.push(i);} await ensureMeta(i); }
+
+async function toggleSeries(i){
+  const pos=S.selected.indexOf(i);
+  if(pos>=0){S.selected.splice(pos,1);}
+  else{ if(S.selected.length>=4){toast("Up to 4 panels. Deselect one first.");return;}
+        S.selected.push(i);await ensureMeta(i);}
+  updateSeriesUI();layout();
+}
+
+/* ---------- layout & rendering ---------- */
+function layout(){
+  const grid=$("#grid");grid.innerHTML="";
+  const k=S.selected.length;
+  if(!k){grid.style.gridTemplate="";grid.innerHTML='<div class="empty">Select one or more series from the left</div>';updateSlice();return;}
+  const cols=k===1?1:2, rows=k<=2?1:2;
+  grid.style.gridTemplateColumns=`repeat(${cols},1fr)`;
+  grid.style.gridTemplateRows=`repeat(${rows},1fr)`;
+  S.selected.forEach(i=>{
+    const pane=document.createElement("div");pane.className="pane";pane.dataset.i=i;
+    pane.innerHTML=`<img draggable="false"><div class="ov tl"></div>
+      <div class="ov bl"></div><div class="ov br"></div>
+      <button class="close" title="Remove">✕</button>`;
+    pane.querySelector(".close").onclick=e=>{e.stopPropagation();toggleSeries(i);};
+    attachPane(pane,i);
+    grid.appendChild(pane);
+  });
+  updateSlice();
+}
+
+function indexFor(i){const n=S.meta[i].planes[S.plane];return Math.round(S.pos*(n-1));}
+
+function updateSlice(){
+  let maxN=1;
+  document.querySelectorAll(".pane").forEach(pane=>{
+    const i=+pane.dataset.i, m=S.meta[i]; if(!m)return;
+    const n=m.planes[S.plane]; maxN=Math.max(maxN,n);
+    const idx=indexFor(i); const wl=S.wl[i];
+    const img=pane.querySelector("img");
+    const url=`/api/series/${i}/slice?plane=${S.plane}&index=${idx}&filter=${S.filter}`+
+      `&level=${wl.level.toFixed(1)}&width=${wl.width.toFixed(1)}`;
+    if(img._url!==url){img._url=url;img.src=url;}
+    const v=S.view[i];
+    img.style.transform=`translate(${v.tx}px,${v.ty}px) scale(${v.zoom})`;
+    pane.querySelector(".tl").textContent=S.series[i].desc;
+    pane.querySelector(".bl").textContent=`${idx+1} / ${n}`;
+    pane.querySelector(".br").textContent=`W ${Math.round(wl.width)}  L ${Math.round(wl.level)}`;
+  });
+  const n=maxN;
+  const sl=$("#slice");sl.value=Math.round(S.pos*1000);
+  $("#slicelbl").textContent=`Slice ${Math.round(S.pos*(n-1))+1} / ${n}`;
+}
+
+/* ---------- per-pane interaction ---------- */
+function attachPane(pane,i){
+  pane.addEventListener("wheel",e=>{
+    e.preventDefault();
+    if(e.ctrlKey||e.metaKey){ const v=S.view[i];
+      v.zoom=Math.min(8,Math.max(1,v.zoom*(e.deltaY<0?1.12:0.9)));
+      if(v.zoom===1){v.tx=0;v.ty=0;} updateSlice(); return; }
+    step(e.deltaY>0?1:-1);
+  },{passive:false});
+
+  let drag=null;
+  pane.addEventListener("mousedown",e=>{
+    if(e.button!==0)return;
+    pane.classList.add("focus");
+    drag={x:e.clientX,y:e.clientY,mode:(e.shiftKey?"pan":"wl"),
+      L:S.wl[i].level,W:S.wl[i].width,tx:S.view[i].tx,ty:S.view[i].ty};
+  });
+  window.addEventListener("mousemove",e=>{
+    if(!drag)return;
+    const dx=e.clientX-drag.x, dy=e.clientY-drag.y;
+    if(drag.mode==="pan"){S.view[i].tx=drag.tx+dx;S.view[i].ty=drag.ty+dy;updateSlice();return;}
+    const wl=S.wl[i], span=wl.baseW;
+    wl.width=Math.max(span*0.05, drag.W+dx*span/300);
+    wl.level=drag.L - dy*span/300;
+    schedule();
+  });
+  window.addEventListener("mouseup",()=>{if(drag){drag=null;pane.classList.remove("focus");}});
+  pane.addEventListener("dblclick",()=>{S.view[i]={zoom:1,tx:0,ty:0};
+    S.wl[i].level=S.wl[i].baseL;S.wl[i].width=S.wl[i].baseW;updateSlice();});
+}
+
+let raf=null;
+function schedule(){if(raf)return;raf=requestAnimationFrame(()=>{raf=null;updateSlice();});}
+
+function step(dir){
+  let maxN=1;S.selected.forEach(i=>maxN=Math.max(maxN,S.meta[i].planes[S.plane]));
+  const d=maxN>1?1/(maxN-1):0;
+  S.pos=Math.min(1,Math.max(0,S.pos+dir*d));updateSlice();
+}
+
+/* ---------- toolbar ---------- */
+$("#planes").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+  S.plane=b.dataset.plane;
+  document.querySelectorAll("#planes button").forEach(x=>x.classList.toggle("active",x===b));
+  updateSlice();};
+$("#filter").onchange=e=>{S.filter=e.target.value;forceReload();updateSlice();};
+$("#preset").onchange=e=>{applyPreset(e.target.value);e.target.value="auto";};
+$("#btnResetWL").onclick=()=>{S.selected.forEach(i=>{S.wl[i].level=S.wl[i].baseL;S.wl[i].width=S.wl[i].baseW;});updateSlice();};
+$("#btnResetView").onclick=()=>{S.selected.forEach(i=>S.view[i]={zoom:1,tx:0,ty:0});updateSlice();};
+$("#btnSync").onclick=e=>{S.sync=!S.sync;e.target.classList.toggle("active",S.sync);};
+$("#btnInfo").onclick=()=>{S.showInfo=!S.showInfo;renderPatient();};
+$("#btnTheme").onclick=toggleTheme;
+$("#btnHelp").onclick=()=>$("#help").style.display="flex";
+$("#btnQuit").onclick=async()=>{
+  if(!confirm("Stop the viewer? You can restart it any time."))return;
+  try{await fetch("/api/quit",{method:"POST"});}catch(e){}
+  document.body.innerHTML='<div style="display:grid;place-items:center;height:100vh;'+
+    'color:#8a94a6;font:16px system-ui;text-align:center">Viewer stopped.<br>'+
+    'You can close this tab.</div>';
+};
+$("#help").onclick=e=>{if(e.target.id==="help")e.target.style.display="none";};
+$("#slice").oninput=e=>{S.pos=e.target.value/1000;updateSlice();};
+
+function forceReload(){document.querySelectorAll(".pane img").forEach(im=>im._url="");}
+// CT windows as [level, width] in Hounsfield Units
+const CT_PRESETS={ct_brain:[40,80],ct_soft:[40,400],ct_abdomen:[50,350],
+  ct_lung:[-600,1500],ct_bone:[400,1800],ct_angio:[100,700]};
+function applyPreset(kind){
+  const ct=CT_PRESETS[kind];
+  S.selected.forEach(i=>{const wl=S.wl[i];
+    if(ct){wl.level=ct[0];wl.width=ct[1];}
+    else if(kind==="auto"){wl.level=wl.baseL;wl.width=wl.baseW;}
+    else if(kind==="bright"){wl.level=wl.baseL*0.7;}
+    else if(kind==="dark"){wl.level=wl.baseL*1.3;}
+    else if(kind==="high"){wl.width=wl.baseW*0.6;}
+    else if(kind==="low"){wl.width=wl.baseW*1.6;}
+  });updateSlice();}
+
+function toggleTheme(){S.theme=S.theme==="dark"?"light":"dark";
+  document.documentElement.dataset.theme=S.theme;
+  $("#btnTheme").textContent=S.theme==="dark"?"☾":"☀";}
+
+/* ---------- keyboard ---------- */
+window.addEventListener("keydown",e=>{
+  if(e.target.tagName==="SELECT"||e.target.tagName==="INPUT")return;
+  const k=e.key.toLowerCase();
+  if(k==="arrowup"){step(1);e.preventDefault();}
+  else if(k==="arrowdown"){step(-1);e.preventDefault();}
+  else if(k==="a"||k==="c"||k==="s"){const p={a:"axial",c:"coronal",s:"sagittal"}[k];
+    S.plane=p;document.querySelectorAll("#planes button").forEach(x=>x.classList.toggle("active",x.dataset.plane===p));updateSlice();}
+  else if(k>="1"&&k<="7"){const f=FILTER_KEYS[+k-1];S.filter=f;$("#filter").value=f;forceReload();updateSlice();}
+  else if(k==="r"){$("#btnResetWL").onclick();}
+  else if(k==="f"){$("#btnResetView").onclick();}
+  else if(k==="i"){S.showInfo=!S.showInfo;renderPatient();}
+  else if(k==="d"){toggleTheme();}
+  else if(k==="?"){$("#help").style.display="flex";}
+  else if(k==="escape"){$("#help").style.display="none";}
+});
+
+/* pick up a study passed on the command line, if any */
+(async()=>{
+  const r=await jget("/api/state");
+  if(!r||!r.ok)return;
+  S.series=r.series;S.patient=r.patient;S.selected=[];S.meta={};S.wl={};S.view={};
+  renderPatient();renderSeries();
+  // optional shareable state via #sel=1,2&plane=axial&filter=clahe
+  const h=new URLSearchParams(location.hash.slice(1));
+  if(h.get("plane")){S.plane=h.get("plane");
+    document.querySelectorAll("#planes button").forEach(x=>x.classList.toggle("active",x.dataset.plane===S.plane));}
+  if(h.get("filter")){S.filter=h.get("filter");$("#filter").value=S.filter;}
+  if(h.get("info")==="off"){S.showInfo=false;renderPatient();}
+  let sel=(h.get("sel")||"").split(",").map(Number).filter(n=>!isNaN(n)&&S.series[n]&&S.series[n].is_image);
+  if(!sel.length){const f=S.series.find(s=>s.is_image);sel=f?[f.index]:[];}
+  for(const i of sel.slice(0,4)){S.selected.push(i);await ensureMeta(i);}
+  updateSeriesUI();layout();
+})();
+</script>
+</body>
+</html>

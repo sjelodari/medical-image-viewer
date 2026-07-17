@@ -1,0 +1,29 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Medical scan data — never commit patient data
+*.dcm
+*.nii
+*.nii.gz
+DICOM/
+dicom/
+data/
+scans/
+samples/
+
+# OS / editor cruft
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Screenshots directory is tracked; ignore stray exports
+/tmp_*
